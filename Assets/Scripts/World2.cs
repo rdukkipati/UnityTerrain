@@ -102,6 +102,8 @@ public class World2 : MonoBehaviour
     //How large each step is in world units when sampling points in marching cubes
     public int chunkStep = 2;
 
+    public int batchSize = 50;
+
     //How many level of detail layers there are
     //Minimum value is 1 layer which is lod 0
     int lodLevels = 12;
@@ -136,8 +138,7 @@ public class World2 : MonoBehaviour
 
     }
 
-    //Allows me to do some unique logic on the first update
-    bool firstUpdate = true;
+
 
 
     //Spawn entire world immediately
@@ -145,59 +146,6 @@ public class World2 : MonoBehaviour
     //Here I stall main thread until whole world is spawned
     void Start()
     {
-        Debug.Log("Size = " + chunkSize);
-
-        //load entire world on main thread immediately
-        //Grab player position
-        playerCurrentPosition = new float3(player.position.x, player.position.y, player.position.z);
-
-        //Convert player position to chunk coordinates
-        //See line 676
-        playerChunkPosition = CalculateChunkPosition(playerCurrentPosition, chunkSize, 0);
-
-        //Queues chunks that need to be disabled and enabled
-        //See line 329
-        DisableEnableJob job = new DisableEnableJob
-        {
-            chunkInfos = chunkInfos,
-            oldChunks = oldChunks,
-            positionHashSet = positionHashSet,
-            existingChunks = existingChunks,
-            newChunks = newChunks,
-            chunksToEnable = chunksToEnable,
-            chunksToDisable = chunksToDisable.AsParallelWriter(),
-            playerCurrentPosition = playerCurrentPosition,
-            firstUpdate = firstUpdate,
-            chunkSize = chunkSize,
-        };
-
-        job.Schedule(chunkInfos.Length, 32).Complete();
-
-
-        //Render all chunks immediately
-        for (int i = 0; i < chunksToEnable.Length; i++)
-        {
-            ChunkKey chunkKey = chunksToEnable[i];
-            if (chunkKey.lod == -1)
-            //lod of -1 is my way of saying don't enable this chunk
-            {
-                continue;
-            }
-            //Either recycles existing chunk or creates new chunk game object
-            //Then updates the mesh using compute shader that runs marching cubes
-            //See line 427
-            RenderChunk(chunkKey);
-        }
-
-        //swap oldChunks and newChunks
-        var temp = oldChunks;
-        oldChunks = newChunks;
-        newChunks = temp;
-
-        firstUpdate = false;
-        playerOldChunkPosition = playerChunkPosition;
-
-
 
     }
 
@@ -205,6 +153,9 @@ public class World2 : MonoBehaviour
     //I have a dedicated coroutine variable so I can
     //stop it when necessary
     Coroutine EnableCoroutine;
+
+    //Allows me to do some unique logic on the first update
+    bool firstUpdate = true;
 
     void Update()
     {
@@ -256,7 +207,7 @@ public class World2 : MonoBehaviour
 
         //Enable chunks in coroutine
         //See line 386
-        EnableCoroutine = StartCoroutine(EnableChunks(chunksToEnable, 10));
+        EnableCoroutine = StartCoroutine(EnableChunks(chunksToEnable, batchSize));
 
         //swap oldChunks and newChunks
         var temp = oldChunks;
@@ -264,6 +215,8 @@ public class World2 : MonoBehaviour
         newChunks = temp;
 
         playerOldChunkPosition = playerChunkPosition;
+
+        firstUpdate = false;
 
 
     }
