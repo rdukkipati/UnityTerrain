@@ -274,7 +274,7 @@ Camera:
     width: 1
     height: 1
   near clip plane: 0.3
-  far clip plane: 1000
+  far clip plane: 200000
   field of view: 60
   orthographic: 0
   orthographic size: 5
@@ -301,12 +301,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 1794041948}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1013861063
 GameObject:
@@ -342,7 +342,9 @@ MonoBehaviour:
   material: {fileID: 2100000, guid: 9f945e4bee68c3b43985664bc146d805, type: 2}
   shader: {fileID: 7200000, guid: dfc004dc2d2b2c74ab3c3c0769e494be, type: 3}
   chunkSize: 32
-  chunkStep: 2
+  chunkStep: 1
+  batchSize: 10
+  viewDistance: 8
 --- !u!4 &1013861065
 Transform:
   m_ObjectHideFlags: 0
@@ -391,7 +393,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b73afe8a95207784c87fbb4df9d94144, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  moveSpeed: 50
+  moveSpeed: 1000
   lookSensitivity: 8
   gravity: 0
 --- !u!143 &1794041944
@@ -505,14 +507,14 @@ Transform:
   m_LocalPosition: {x: 0, y: 8000, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 963194228}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 963194228}
   - {fileID: 705507995}
   - {fileID: 1013861065}
   - {fileID: 1794041948}
