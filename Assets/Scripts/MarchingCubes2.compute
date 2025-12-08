@@ -1,0 +1,195 @@
+// Thanks to Sebastian Lague for inspiration
+#pragma kernel March
+#include "Noise.hlsl"
+#include "MarchTables.hlsl"
+#include "FastNoiseLite.hlsl"
+//Raghav Dukkipati
+
+//Struct that triangles buffer consists of
+struct Triangle
+{
+    float3 vertexA;
+    float3 vertexB;
+    float3 vertexC;
+    
+    float3 normalA;
+    float3 normalB;
+    float3 normalC;
+    
+    float4 colorA;
+    float4 colorB;
+    float4 colorC;
+};
+
+
+// Can't use AppendStructuredBuffer because Metal API does not support it
+RWStructuredBuffer<Triangle> triangles;
+RWStructuredBuffer<uint> triangleCount; // single-element buffer
+
+// chunkPosition is in chunk-space coordinates
+int3 chunkPosition;
+int lod;
+int chunkSize;
+//isoLevel is a marching cubes thing
+//I go with 0 as the default
+// > 0 is air
+// < 0 is solid
+float isoLevel;
+int chunkStep;
+int seed;
+
+
+// --- interpolate vertices for marching cubes
+float3 interpolateVerts(float4 v1, float4 v2)
+{
+    //applies a sort of weight to each vertex depending on its density value
+    //resulting value is closer to the "heavier" vertex
+    float t = (isoLevel - v1.w) / (v2.w - v1.w);
+    return v1.xyz + t * (v2.xyz - v1.xyz);
+}
+
+// --- compute voxel coordinate and density
+float4 calculateCoord(uint3 id, fnl_state noise)
+{
+    //Adjust thread ID to world coordinates of the chunk
+    float world_x = float(id.x * (chunkStep << lod)) + float(chunkPosition.x * (chunkSize << lod));
+    float world_y = float(id.y * (chunkStep << lod)) + float(chunkPosition.y * (chunkSize << lod));
+    float world_z = float(id.z * (chunkStep << lod)) + float(chunkPosition.z * (chunkSize << lod));
+
+    float3 worldPos = float3(world_x, world_y, world_z);
+
+    //Get 2D perline noise
+    //Ideally I would have used 3D noise, but creating good terrain from 3D noise is more complicated
+    //And I was not able to get to it
+    float density = fnlGetNoise2D(noise, world_x, world_z);
+    //Manipulate noise values to range form 0 to 8000 instead of -1 to 1
+    density = RemapNoiseToHeight(density);
+    //Because marching cubes expects density values instead of a heightmap
+    density = world_y - density;
+
+    return float4(worldPos, density);
+}
+
+//Calculate smooth normals by sampling adjacent points on the heightmap
+float3 calculateNormal(float3 vertex, fnl_state noise)
+{
+    float heightL = RemapNoiseToHeight(fnlGetNoise2D(noise, vertex.x - (chunkStep << lod), vertex.z));
+    float heightR = RemapNoiseToHeight(fnlGetNoise2D(noise, vertex.x + (chunkStep << lod), vertex.z));
+    float heightD = RemapNoiseToHeight(fnlGetNoise2D(noise, vertex.x, vertex.z - (chunkStep << lod)));
+    float heightU = RemapNoiseToHeight(fnlGetNoise2D(noise, vertex.x, vertex.z + (chunkStep << lod)));
+
+    return normalize(float3(heightL - heightR, 2.0, heightD - heightU));
+}
+
+[numthreads(8, 8, 8)]
+void March(uint3 id : SV_DispatchThreadID)
+{
+    //Using fast noise lite library for perlin noise
+    fnl_state noise = fnlCreateState();
+    noise.noise_type = FNL_NOISE_PERLIN;
+    noise.frequency = 0.00002;
+    noise.fractal_type = FNL_FRACTAL_RIDGED;
+    noise.octaves = 8;
+    noise.seed = seed;
+
+    // 8 corners of the current cube
+    float4 cubeCorners[8] =
+    {
+        calculateCoord(id, noise),
+        calculateCoord(uint3(id.x + 1, id.y, id.z), noise),
+        calculateCoord(uint3(id.x + 1, id.y, id.z + 1), noise),
+        calculateCoord(uint3(id.x, id.y, id.z + 1), noise),
+        calculateCoord(uint3(id.x, id.y + 1, id.z), noise),
+        calculateCoord(uint3(id.x + 1, id.y + 1, id.z), noise),
+        calculateCoord(uint3(id.x + 1, id.y + 1, id.z + 1), noise),
+        calculateCoord(uint3(id.x, id.y + 1, id.z + 1), noise)
+    };
+
+    //Determine cubeIndex for marching cubes
+    //Determine which of the 256 possible cases we are dealing with
+    int cubeIndex = 0;
+    if (cubeCorners[0].w < isoLevel)
+        cubeIndex |= 1;
+    if (cubeCorners[1].w < isoLevel)
+        cubeIndex |= 2;
+    if (cubeCorners[2].w < isoLevel)
+        cubeIndex |= 4;
+    if (cubeCorners[3].w < isoLevel)
+        cubeIndex |= 8;
+    if (cubeCorners[4].w < isoLevel)
+        cubeIndex |= 16;
+    if (cubeCorners[5].w < isoLevel)
+        cubeIndex |= 32;
+    if (cubeCorners[6].w < isoLevel)
+        cubeIndex |= 64;
+    if (cubeCorners[7].w < isoLevel)
+        cubeIndex |= 128;
+
+    // Create triangles for current cube
+    for (int i = 0; triangulation[cubeIndex][i] != -1; i += 3)
+    {
+        //See MarchTables.hlsl these functions
+        int a0 = cornerIndexAFromEdge[triangulation[cubeIndex][i]];
+        int b0 = cornerIndexBFromEdge[triangulation[cubeIndex][i]];
+
+        int a1 = cornerIndexAFromEdge[triangulation[cubeIndex][i + 1]];
+        int b1 = cornerIndexBFromEdge[triangulation[cubeIndex][i + 1]];
+
+        int a2 = cornerIndexAFromEdge[triangulation[cubeIndex][i + 2]];
+        int b2 = cornerIndexBFromEdge[triangulation[cubeIndex][i + 2]];
+
+        Triangle tri;
+        tri.vertexA = interpolateVerts(cubeCorners[a0], cubeCorners[b0]);
+        tri.vertexB = interpolateVerts(cubeCorners[a1], cubeCorners[b1]);
+        tri.vertexC = interpolateVerts(cubeCorners[a2], cubeCorners[b2]);
+
+        //Calculate triangle normal
+        float3 normal = normalize(cross(tri.vertexB - tri.vertexA,
+                                tri.vertexC - tri.vertexA));
+
+        //Slope: 1 = flat, 0 = vertical
+        //clamp value to 0-1
+        float slope = saturate(normal.y);
+
+        //Height of the triangle
+        float height = tri.vertexA.y;
+
+        // ----------------------
+        // Color definitions
+        // ----------------------
+        float darken = 0.25;
+
+        float3 greenLow = float3(0.1, 0.4, 0.1) * darken;
+        float3 greenHigh = float3(0.2, 0.8, 0.2) * darken;
+
+        float3 whiteLow = float3(0.8, 0.8, 0.8);
+        float3 whiteHigh = float3(1.0, 1.0, 1.0);
+
+        // ----------------------
+        // Height-based blend
+        // ----------------------
+
+        // 0 = green region, 1 = white region
+        float heightBlend = smoothstep(4500.0, 5500.0, height);
+
+        // Flat terrain colors
+        float3 greenColor = lerp(greenLow, greenHigh, slope);
+        float3 whiteColor = lerp(whiteLow, whiteHigh, slope);
+
+        // Base terrain color by height
+        float3 terrainColor = lerp(greenColor, whiteColor, heightBlend);
+
+        // Apply same color to triangle
+        tri.colorA = float4(terrainColor, 1.0);
+        tri.colorB = float4(terrainColor, 1.0);
+        tri.colorC = float4(terrainColor, 1.0);
+
+        tri.normalA = calculateNormal(tri.vertexA, noise);
+        tri.normalB = calculateNormal(tri.vertexB, noise);
+        tri.normalC = calculateNormal(tri.vertexC, noise);
+
+        uint index;
+        InterlockedAdd(triangleCount[0], 1, index);
+        triangles[index] = tri;
+    }
+}
