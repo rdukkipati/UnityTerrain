@@ -1,6 +1,21 @@
 ## Click image to open video
 [![Watch the video](https://img.youtube.com/vi/BmZq7yu3awc/maxresdefault.jpg)](https://www.youtube.com/watch?v=BmZq7yu3awc)
 
+## Infinite Terrain Generator
 
+An infinite terrain system built in Unity using compute shaders and the Marching Cubes algorithm.
 
-Infinite terrain generator in Unity that uses marching cubes algorithm in compute shaders to generate vertex data for chunk meshes based off a scalar field. The scalar field is generated from a noise algorithm within the compute shader. Features a chunk manager in World2.cs file that uses a recycle pool of chunks to prevent wasteful creation and destruction of chunk objects. Whenever chunks go out of range, their mesh data is cleared, and the game object is entered into a queue of chunks. At the same time, new world space comes into range of the player, so chunks are taken out of the recycle pool and sent to the compute shader to recieve new vertex data. This ensures there is always a set amount of chunks in the world at any time. Chunks are also generated with lower levels of detail the farther they are from the player. This allows for higher render distances without exploding the computer. I use the Unity Jobs system to look through an array of existing chunks to find which chunks need to be disabled and recycled. I use a coroutine for generating new chunks. If the player moves to a new chunk, the coroutine restarts so the closest chunks to the player generate first. The burst compiler is used in the multithreaded jobs sections in order to offer some performance increase. 
+### Features
+
+* Generates terrain meshes entirely on the GPU using Marching Cubes.
+* Creates terrain density values from a procedural noise-based scalar field computed in a shader.
+* Uses a chunk recycling system to avoid costly GameObject creation and destruction.
+
+  * Chunks that leave the player's render range have their mesh data cleared and are returned to a reuse pool.
+  * When new terrain enters range, recycled chunks are reassigned and regenerated with new mesh data.
+* Maintains a fixed number of active chunks in the world, reducing memory allocations and garbage collection.
+* Supports multiple Levels of Detail (LOD), generating lower-resolution meshes for distant terrain to improve performance and increase render distance.
+* Uses the Unity Job System with Burst Compiler optimizations to efficiently identify and recycle out-of-range chunks.
+* Generates chunks asynchronously through a coroutine system.
+
+  * If the player enters a new chunk, generation is reprioritized so nearby terrain loads first.
