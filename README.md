@@ -1,4 +1,4 @@
-## Click to open video
+## Click image to open video
 [![Watch the video](https://img.youtube.com/vi/BmZq7yu3awc/maxresdefault.jpg)](https://www.youtube.com/watch?v=BmZq7yu3awc)
 
 
