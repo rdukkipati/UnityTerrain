@@ -1,7 +1,6 @@
-## Click image to open video
-[![Watch the video](https://img.youtube.com/vi/BmZq7yu3awc/maxresdefault.jpg)](https://www.youtube.com/watch?v=BmZq7yu3awc)
-
 ## Infinite Terrain Generator
+Click image to open video
+[![Watch the video](https://img.youtube.com/vi/BmZq7yu3awc/maxresdefault.jpg)](https://www.youtube.com/watch?v=BmZq7yu3awc)
 
 An infinite terrain system built in Unity using compute shaders and the Marching Cubes algorithm.
 
